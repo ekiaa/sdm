@@ -39,7 +39,7 @@ delete(Key) ->
 init([]) ->
 	ClearingInterval = application:get_env(sdm, clearing_interval, 60000),
 	MessageLifetime = application:get_env(sdm, message_lifetime, 60),
-	timer:send_interval(ClearingInterval, clear),
+	% timer:send_interval(ClearingInterval, clear),
 	{ok, #{list => [], lifetime => MessageLifetime}}.
 
 %%--------------------------------------------------------------------
