@@ -2,7 +2,7 @@
 
 -bihaviour(gen_server).
 
--export([start/0, start_link/0, get/1, get/2, post/2]).
+-export([start/0, start_link/0, get/1, get/2, post/2, delete/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -37,7 +37,7 @@ delete(Key) ->
 %%--------------------------------------------------------------------
 
 init([]) ->
-	ClearingInterval = application:get_env(sdm, clearing_interval, 60000),
+	% ClearingInterval = application:get_env(sdm, clearing_interval, 60000),
 	MessageLifetime = application:get_env(sdm, message_lifetime, 60),
 	% timer:send_interval(ClearingInterval, clear),
 	{ok, #{list => [], lifetime => MessageLifetime}}.
@@ -79,7 +79,7 @@ handle_call({post, Key, Msg}, _, #{list := List} = State) ->
 			{reply, ok, State#{lists => lists:keyreplace(Key, 1, {Key, [], Msg, Timestamp})}};
 		{Key, Waiting, undefined, Timestamp} ->
 			ok = mailing(Waiting, Key, Msg),
-			{reply, ok, State#{list => lists:keyreplace(Key, 1, {Key, [], undefined, Timestamp})}};
+			{reply, ok, State#{list => lists:keyreplace(Key, 1, {Key, [], undefined, Timestamp})}}
 	end;
 
 handle_call({delete, Key}, _, #{list := List} = State) ->
