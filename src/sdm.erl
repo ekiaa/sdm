@@ -17,13 +17,16 @@ start_link() ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 get(Key) ->
-	get(Key, self()).
+	gen_server:call(?MODULE, {get, Key}).
 
-get(Key, Pid) ->
-	gen_server:call(?MODULE, {get, Key, Pid}).
+get(Key, ReplyTo) ->
+	gen_server:call(?MODULE, {get, Key, ReplyTo}).
 
 post(Key, Msg) ->
 	gen_server:call(?MODULE, {post, Key, Msg}).
+
+delete(Key) ->
+	gen_server:call(?MODULE, {delete, Key}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -43,29 +46,44 @@ init([]) ->
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
 
-handle_call({get, Key, WaitingPid}, _, #{list := List} = State) ->
+handle_call({get, Key}, Client, #{list := List} = State) ->
 	case lists:keyfind(Key, 1, List) of
 		false ->
 			Timestamp = calendar:datetime_to_gregorian_seconds(calendar:local_time()),
-			{reply, ok, State#{list => [{Key, WaitingPid, undefined, Timestamp} | List]}};
-		{Key, undefined, Msg, _} ->
-			WaitingPid ! {sdm, Key, Msg},
-			{reply, ok, State#{list => lists:keydelete(Key, 1, List)}};
-		{Key, _, undefined, _} ->
-			{reply, {error, already_waited}, State}
+			{noreply, State#{list => [{Key, [Client], undefined, Timestamp} | List]}};
+		{Key, Waiting, undefined, Timestamp} ->
+			{noreply, State#{list => lists:keyreplace(Key, 1, {Key, [Client | Waiting], undefined, Timestamp})}};
+		{Key, _, Msg, _} ->
+			{reply, {ok, Msg}, State}
+	end;
+
+handle_call({get, Key, ReplyTo}, _, #{list := List} = State) ->
+	case lists:keyfind(Key, 1, List) of
+		false ->
+			Timestamp = calendar:datetime_to_gregorian_seconds(calendar:local_time()),
+			{reply, ok, State#{list => [{Key, ReplyTo, undefined, Timestamp} | List]}};
+		{Key, Waiting, undefined, Timestamp} ->
+			{reply, ok, State#{list => lists:keyreplace(Key, 1, {Key, [ReplyTo | Waiting], undefined, Timestamp})}};
+		{Key, _, Msg, _} ->
+			ReplyTo ! {sdm, Key, Msg},
+			{reply, ok, State}
 	end;
 
 handle_call({post, Key, Msg}, _, #{list := List} = State) ->
 	case lists:keyfind(Key, 1, List) of
 		false ->
 			Timestamp = calendar:datetime_to_gregorian_seconds(calendar:local_time()),
-			{reply, ok, State#{list => [{Key, undefined, Msg, Timestamp} | List]}};
-		{Key, undefined, _, _} ->
-			{reply, {error, already_sended}, State};
-		{Key, WaitingPid, undefined, _} ->
-			WaitingPid ! {sdm, Key, Msg},
-			{reply, ok, State#{list => lists:keydelete(Key, 1, List)}}
+			{reply, ok, State#{list => [{Key, [], Msg, Timestamp} | List]}};
+		{Key, [], _, _} ->
+			Timestamp = calendar:datetime_to_gregorian_seconds(calendar:local_time()),
+			{reply, ok, State#{lists => lists:keyreplace(Key, 1, {Key, [], Msg, Timestamp})}};
+		{Key, Waiting, undefined, Timestamp} ->
+			ok = mailing(Waiting, Key, Msg),
+			{reply, ok, State#{list => lists:keyreplace(Key, 1, {Key, [], undefined, Timestamp})}};
 	end;
+
+handle_call({delete, Key}, _, #{list := List} = State) ->
+	{reply, ok, State#{list => list:keydelete(Key, 1, List)}};
 
 handle_call(Request, From, State) ->
 	Error = {error, {?MODULE, ?LINE, {From, Request}}},
@@ -110,3 +128,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+
+mailing([], _, _) ->
+	ok;
+mailing([ReplyTo | Waiting], Key, Msg) when is_pid(ReplyTo) ->
+	ReplyTo ! {sdm, Key, Msg},
+	mailing(Waiting, Key, Msg);
+mailing([Client | Waiting], Key, Msg) when is_tuple(Client) ->
+	gen_server:reply(Client, {ok, Msg}),
+	mailing(Waiting, Key, Msg).
