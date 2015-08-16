@@ -1,16 +1,15 @@
-{application, 'sdm',
- [{description, "An OTP application"},
-  {vsn, "0.1.0"},
-  {registered, []},
-  {mod, {'sdm_app', []}},
-  {applications,
-   [kernel,
-    stdlib
-   ]},
-  {env,[]},
-  {modules, []},
-
-  {contributors, []},
-  {licenses, []},
-  {links, []}
- ]}.
+{application, 'sdm', [
+	{description, "An OTP application"},
+	{vsn, "0.1.1"},
+	{registered, []},
+	{mod, {'sdm_app', []}},
+	{applications, [
+		kernel,
+		stdlib
+	]},
+	{env,[]},
+	{modules, []},
+	{contributors, []},
+	{licenses, []},
+	{links, []}
+]}.
